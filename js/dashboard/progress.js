@@ -1,4 +1,3 @@
-// dashboard/progress.js
 import { fetchGraphQL } from '../api/graphql.js';
 import { progressData, currentProgressIndex, setProgressData, setCurrentProgressIndex } from '../state.js';
 

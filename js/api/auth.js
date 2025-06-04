@@ -1,4 +1,3 @@
-// api/auth.js
 import { setJwtToken } from '../state.js';
 
 const signinEndpoint = 'https://learn.reboot01.com/api/auth/signin';
