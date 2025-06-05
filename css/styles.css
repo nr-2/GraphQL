@@ -378,3 +378,25 @@
 }
 
 
+    .password-container {
+      position: relative;
+      width: auto;
+      margin-bottom: 15px;
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      color: var(--font--paragraph);
+      font-size: 1.2em;
+      user-select: none;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 0 5px;
+    }
