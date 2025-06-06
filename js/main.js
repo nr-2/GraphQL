@@ -1,6 +1,6 @@
     const signinEndpoint = 'https://learn.reboot01.com/api/auth/signin';
     const gqlEndpoint = 'https://learn.reboot01.com/api/graphql-engine/v1/graphql';
-    const logoutEndpoint = 'https://learn.reboot01.com/api/auth/signout';
+    // const logoutEndpoint = 'https://learn.reboot01.com/api/auth/signout';
 
     let jwtToken = null;
     let progressData = [];
