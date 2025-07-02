@@ -3,7 +3,7 @@ import { drawPie, drawXPOverTime, drawSkills } from './charts.js';
 
 let progressData = [];
 let currentProgressIndex = 0;
-const logoutEndpoint = 'https://learn.reboot01.com/api/auth/signout'; // Defined here as it's directly used in logout functionality.
+// const logoutEndpoint = 'https://learn.reboot01.com/api/auth/signout'; // Defined here as it's directly used in logout functionality.
 
 export function showProgress(index) {
   const progressCard = document.getElementById('progressCard');
