@@ -35,216 +35,177 @@ export function showProgress(index) {
   if (nextBtn) nextBtn.disabled = index === progressData.length - 1;
 }
 
-export function bindProgressNavButtons() {
-  const nextBtn = document.getElementById('nextButton');
-  const prevBtn = document.getElementById('prevButton');
+/**
+ * Loads all necessary dashboard data (user info, audit data, skills, XP over time, progress)
+ * and updates the UI accordingly. Handles loading state.
+ */
+export async function loadDashboardData() {
+  const loader = document.getElementById('loader');
+  const dashboardContent = document.getElementById('dashboardContent');
+  const dashboardHeader = document.querySelector('.dashboard-header');
+  const dashboardMain = document.querySelector('.dashboard');
 
-  if (!nextBtn || !prevBtn) {
-    return;
+  loader.style.display = 'block'; // Show loader
+
+  try {
+    const userInfo = await loadUserInfo();
+    document.getElementById('username').textContent = userInfo.user[0].login;
+    document.getElementById('firstName').textContent = userInfo.user[0].attrs.firstName || 'N/A';
+    document.getElementById('lastName').textContent = userInfo.user[0].attrs.lastName || 'N/A';
+    document.getElementById('email').textContent = userInfo.user[0].attrs.email || 'N/A';
+
+    const auditData = await loadAuditData();
+    const doneRatio = auditData.done / (auditData.done + auditData.received) * 100 || 0;
+    const receivedRatio = auditData.received / (auditData.done + auditData.received) * 100 || 0;
+    drawPie(auditData.done, auditData.received);
+    document.getElementById('auditText').textContent = `Done: ${doneRatio.toFixed(2)}%, Received: ${receivedRatio.toFixed(2)}%`;
+
+    const { skillsArray, xpOverTimeArray } = await loadSkillsAndXPData();
+    drawSkills(skillsArray);
+    drawXPOverTime(xpOverTimeArray);
+
+    const progress = await fetchProgress();
+    progressData = progress.progress.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    currentProgressIndex = 0;
+    showProgress(currentProgressIndex);
+
+    dashboardContent.style.display = 'grid'; // Use grid for dashboard layout
+    dashboardHeader.style.display = 'flex'; // Display header
+    dashboardMain.style.display = 'block'; // Display dashboard main content
+
+  } catch (error) {
+    console.error('Failed to load dashboard data:', error);
+    alert('Failed to load dashboard data. Please try again.');
+    // Optionally, force logout if data loading fails after login
+    clearJwtToken();
+    document.getElementById('loginBox').style.display = 'block';
+    dashboardContent.style.display = 'none';
+    dashboardHeader.style.display = 'none';
+    dashboardMain.style.display = 'none';
+  } finally {
+    loader.style.display = 'none'; // Hide loader
+  }
+}
+
+/**
+ * Sets up all event listeners for buttons and input fields.
+ */
+export function setupEventListeners() {
+  const loginButton = document.getElementById('loginButton');
+  const loginUsernameInput = document.getElementById('loginUsername');
+  const loginPasswordInput = document.getElementById('loginPassword');
+  const loginError = document.getElementById('loginError');
+  const passwordToggle = document.getElementById('passwordToggle');
+  const logoutButton = document.getElementById('logoutButton');
+  const prevButton = document.getElementById('prevButton');
+  const nextButton = document.getElementById('nextButton');
+
+  // Login button click listener
+  loginButton.addEventListener('click', async () => {
+    const username = loginUsernameInput.value;
+    const password = loginPasswordInput.value;
+    loginError.style.display = 'none'; // Hide previous errors
+
+    if (!username || !password) {
+      loginError.textContent = 'Please enter both username and password.';
+      loginError.style.display = 'block';
+      return;
+    }
+
+    try {
+      await login(username, password);
+      document.getElementById('loginBox').style.display = 'none';
+      await loadDashboardData(); // Load data after successful login
+    } catch (e) {
+      loginError.textContent = e.message || 'Login failed. Please check your credentials.';
+      loginError.style.display = 'block';
+      console.error('Login error:', e);
+    }
+  });
+
+  // Password toggle functionality
+  if (passwordToggle) {
+    passwordToggle.addEventListener('click', () => {
+      const type = loginPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+      loginPasswordInput.setAttribute('type', type);
+      passwordToggle.classList.toggle('fa-eye');
+      passwordToggle.classList.toggle('fa-eye-slash');
+    });
   }
 
-  nextBtn.addEventListener('click', () => {
+  // Logout button click listener (Client-side only)
+  logoutButton.addEventListener('click', () => {
+    clearJwtToken(); // Clear the JWT token locally
+    progressData = []; // Clear progress data
+    currentProgressIndex = 0; // Reset progress index
+
+    // Hide dashboard and show login box
+    document.getElementById('loginBox').style.display = 'block';
+    document.getElementById('dashboardContent').style.display = 'none';
+    document.querySelector('.dashboard-header').style.display = 'none'; // Hide header on logout
+    document.querySelector('.dashboard').style.display = 'none'; // Hide dashboard on logout
+
+    // Clear login form fields and any previous errors
+    document.getElementById('loginUsername').value = '';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('loginError').style.display = 'none';
+  });
+
+  // Progress navigation buttons
+  prevButton.addEventListener('click', () => {
     if (currentProgressIndex < progressData.length - 1) {
       currentProgressIndex++;
       showProgress(currentProgressIndex);
     }
   });
 
-  prevBtn.addEventListener('click', () => {
+  nextButton.addEventListener('click', () => {
     if (currentProgressIndex > 0) {
       currentProgressIndex--;
       showProgress(currentProgressIndex);
     }
   });
-}
 
-async function updateUserInfo() {
-  try {
-    const user = await loadUserInfo();
-    document.getElementById('username').textContent = user.login;
-    document.getElementById('firstName').textContent = user.attrs.firstName || 'N/A';
-    document.getElementById('lastName').textContent = user.attrs.lastName || 'N/A';
-    document.getElementById('email').textContent = user.attrs.email || 'N/A';
-  } catch (error) {
-    document.getElementById('userInfo').innerHTML = '<p>Error loading user information.</p>';
-  }
-}
-
-async function updateAuditData() {
-  try {
-    const { done, received } = await loadAuditData();
-    const ratio = received > 0
-      ? (Math.round((done / received) * 10) / 10).toFixed(1)
-      : done > 0
-      ? '∞'
-      : '0.0';
-
-    const doneMB = (done / 1_000_000).toFixed(2);
-    const receivedMB = (received / 1_000_000).toFixed(2);
-
-    drawPie(done, received);
-    document.getElementById('auditText').innerHTML =
-      `Done: <strong>${doneMB} MB</strong><br>
-      Received: <strong>${receivedMB} MB</strong><br>
-      Ratio: <strong>${ratio}</strong> ${ratio >= 1.5 ? 'Almost perfect!' : ''}`;
-  } catch (error) {
-    document.getElementById('auditSection').innerHTML = '<p>Error loading audit data.</p>';
-  }
-}
-
-async function updateSkillsAndXPData() {
-  try {
-    const { skillsArray, xpOverTimeArray } = await loadSkillsAndXPData();
-    drawSkills(skillsArray);
-    drawXPOverTime(xpOverTimeArray);
-  } catch (error) {
-    document.getElementById('skillsSection').innerHTML = '<p>Error loading skills data.</p>';
-    document.getElementById('xpOverTimeSection').innerHTML = '<p>Error loading XP over time data.</p>';
-  }
-}
-
-async function updateProgressData() {
-  try {
-    progressData = await fetchProgress();
-    if (progressData.length === 0) {
-      document.getElementById('progressCard').innerHTML = '<p>No graded progress found.</p>';
-      document.getElementById('prevButton').disabled = true;
-      document.getElementById('nextButton').disabled = true;
-      return;
-    }
-    currentProgressIndex = 0;
-    showProgress(currentProgressIndex);
-  } catch (error) {
-    document.getElementById('progressCard').innerHTML = `<p>Error loading progress: ${error.message}</p>`;
-    document.getElementById('prevButton').disabled = true;
-    document.getElementById('nextButton').disabled = true;
-  }
-}
-
-export async function loadDashboardData() {
-  await updateUserInfo();
-  await updateAuditData();
-  await updateSkillsAndXPData();
-  await updateProgressData();
-}
-
-export function setupEventListeners() {
-  bindProgressNavButtons();
-
-  const passwordInput = document.getElementById('loginPassword');
-  const passwordToggle = document.getElementById('passwordToggle');
-  const eyeIcon = passwordToggle ? passwordToggle.querySelector('i') : null;
-
-  if (passwordInput && passwordToggle && eyeIcon) {
-    passwordToggle.addEventListener('click', () => {
-      if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        eyeIcon.classList.remove('fa-eye-slash');
-        eyeIcon.classList.add('fa-eye');
-      } else {
-        passwordInput.type = 'password';
-        eyeIcon.classList.remove('fa-eye');
-        eyeIcon.classList.add('fa-eye-slash');
-      }
-    });
-  }
-
-  document.getElementById('loginButton').addEventListener('click', async () => {
-    const username = document.getElementById('loginUsername').value;
-    const password = document.getElementById('loginPassword').value;
-
-    if (!username || !password) {
-      document.getElementById('loginError').textContent = 'Please enter both username and password';
-      document.getElementById('loginError').style.display = 'block';
-      return;
-    }
-
-    try {
-      document.getElementById('loader').style.display = 'block';
-      document.getElementById('loginButton').disabled = true;
-      document.getElementById('loginButton').textContent = 'Logging in...';
-      document.getElementById('loginError').style.display = 'none';
-
-      await login(username, password);
-      document.getElementById('loginBox').style.display = 'none';
-      document.getElementById('dashboardContent').style.display = 'block';
-      document.querySelector('.dashboard-header').style.display = 'flex';
-      document.querySelector('.dashboard').style.display = 'block';
-
-      await loadDashboardData();
-    } catch (e) {
-      document.getElementById('loginError').textContent = e.message || 'Login failed. Please check your credentials.';
-      document.getElementById('loginError').style.display = 'block';
-    } finally {
-      document.getElementById('loader').style.display = 'none';
-      document.getElementById('loginButton').disabled = false;
-      document.getElementById('loginButton').textContent = 'Login to Dashboard';
+  // Handle Enter key for login
+  loginUsernameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      loginPasswordInput.focus();
     }
   });
 
-  document.getElementById('loginPassword').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      document.getElementById('loginButton').click();
-    }
-  });
-
-  document.getElementById('logoutButton').addEventListener('click', async () => {
-    try {
-      const token = getJwtToken();
-      if (token) {
-        const response = await fetch(logoutEndpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (!response.ok) {
-          console.error('Logout failed on server side:', await response.text());
-        }
-      }
-    } catch (error) {
-      console.error('Error during logout API call:', error);
-    } finally {
-      clearJwtToken();
-      progressData = [];
-      currentProgressIndex = 0;
-
-      document.getElementById('loginBox').style.display = 'block';
-      document.getElementById('dashboardContent').style.display = 'none';
-      document.querySelector('.dashboard-header').style.display = 'none'; // Hide header on logout
-      document.querySelector('.dashboard').style.display = 'none'; // Hide dashboard on logout
-
-
-      document.getElementById('loginUsername').value = '';
-      document.getElementById('loginPassword').value = '';
-      document.getElementById('loginError').style.display = 'none';
+  loginPasswordInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      loginButton.click();
     }
   });
 }
 
+/**
+ * Creates and appends decorative lines to the lines-container.
+ * Adjusts number of lines based on screen width.
+ */
 export function createLines() {
   const container = document.getElementById('lines-container');
-  const lineCount = window.innerWidth < 768 ? 8 : 15;
+  const lineCount = window.innerWidth < 768 ? 8 : 15; // Fewer lines on smaller screens
 
-  container.innerHTML = '';
+  container.innerHTML = ''; // Clear existing lines
 
   for (let i = 0; i < lineCount; i++) {
     const line = document.createElement('div');
     line.classList.add('line');
 
-    const width = Math.random() * 100 + 50;
-    const top = Math.random() * 100;
-    const delay = Math.random() * 5;
-    const duration = 5 + Math.random() * 5;
+    // Randomize properties for visual variety
+    const width = Math.random() * 100 + 50; // 50px to 150px
+    const top = Math.random() * 100; // 0% to 100%
+    const delay = Math.random() * 5; // 0s to 5s
+    const duration = 5 + Math.random() * 5; // 5s to 10s
 
     line.style.width = `${width}px`;
     line.style.top = `${top}%`;
-    line.style.opacity = '0';
-    line.style.animationDelay = `${delay}s`;
-    line.style.animationDuration = `${duration}s`;
+    line.style.opacity = '0'; // Start invisible for animation
+    line.style.animation = `line-move ${duration}s linear infinite ${delay}s, fadeIn 1s ease-out ${delay}s forwards`; // Combined animations
 
     container.appendChild(line);
   }
 }
+
