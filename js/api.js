@@ -1,6 +1,5 @@
 const signinEndpoint = 'https://learn.reboot01.com/api/auth/signin';
 const gqlEndpoint = 'https://learn.reboot01.com/api/graphql-engine/v1/graphql';
-// const logoutEndpoint = 'https://learn.reboot01.com/api/auth/signout'; // This will be used in ui.js but defined here for consistency if an actual logout API call is needed.
 
 let jwtToken = null;
 
@@ -57,7 +56,14 @@ export async function loadUserInfo() {
     }
   }`;
   const data = await fetchGraphQL(query);
-  return data.user[0];
+  // Add a defensive check here
+  if (data && data.user && data.user.length > 0) {
+    return data.user[0];
+  } else {
+    // Return a default or throw an error if no user data is found
+    console.warn("No user data found or user array is empty.");
+    return null; // Or throw new Error("User data not found");
+  }
 }
 
 export async function loadAuditData() {

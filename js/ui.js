@@ -3,7 +3,7 @@ import { drawPie, drawXPOverTime, drawSkills } from './charts.js';
 
 let progressData = [];
 let currentProgressIndex = 0;
-const logoutEndpoint = 'https://learn.reboot01.com/api/auth/signout'; // Defined here as it's directly used in logout functionality.
+// const logoutEndpoint = 'https://learn.reboot01.com/api/auth/signout'; // No longer needed if server-side logout is not used
 
 export function showProgress(index) {
   const progressCard = document.getElementById('progressCard');
@@ -61,10 +61,15 @@ export function bindProgressNavButtons() {
 async function updateUserInfo() {
   try {
     const user = await loadUserInfo();
-    document.getElementById('username').textContent = user.login;
-    document.getElementById('firstName').textContent = user.attrs.firstName || 'N/A';
-    document.getElementById('lastName').textContent = user.attrs.lastName || 'N/A';
-    document.getElementById('email').textContent = user.attrs.email || 'N/A';
+    // Defensive check: ensure user and its properties exist
+    if (user) {
+        document.getElementById('username').textContent = user.login || 'N/A';
+        document.getElementById('firstName').textContent = user.attrs?.firstName || 'N/A';
+        document.getElementById('lastName').textContent = user.attrs?.lastName || 'N/A';
+        document.getElementById('email').textContent = user.attrs?.email || 'N/A';
+    } else {
+        document.getElementById('userInfo').innerHTML = '<p>User information not found.</p>';
+    }
   } catch (error) {
     document.getElementById('userInfo').innerHTML = '<p>Error loading user information.</p>';
   }
@@ -189,38 +194,19 @@ export function setupEventListeners() {
   });
 
   document.getElementById('logoutButton').addEventListener('click', async () => {
-    try {
-      const token = getJwtToken();
-      if (token) {
-        const response = await fetch(logoutEndpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+    // Client-side logout: clear the token and reset the UI
+    clearJwtToken(); // Clear the JWT token
+    progressData = []; // Reset progress data
+    currentProgressIndex = 0; // Reset progress index
 
-        if (!response.ok) {
-          console.error('Logout failed on server side:', await response.text());
-        }
-      }
-    } catch (error) {
-      console.error('Error during logout API call:', error);
-    } finally {
-      clearJwtToken();
-      progressData = [];
-      currentProgressIndex = 0;
+    document.getElementById('loginBox').style.display = 'block'; // Show login box
+    document.getElementById('dashboardContent').style.display = 'none'; // Hide dashboard content
+    document.querySelector('.dashboard-header').style.display = 'none'; // Hide header on logout
+    document.querySelector('.dashboard').style.display = 'none'; // Hide dashboard on logout
 
-      document.getElementById('loginBox').style.display = 'block';
-      document.getElementById('dashboardContent').style.display = 'none';
-      document.querySelector('.dashboard-header').style.display = 'none'; // Hide header on logout
-      document.querySelector('.dashboard').style.display = 'none'; // Hide dashboard on logout
-
-
-      document.getElementById('loginUsername').value = '';
-      document.getElementById('loginPassword').value = '';
-      document.getElementById('loginError').style.display = 'none';
-    }
+    document.getElementById('loginUsername').value = ''; // Clear username input
+    document.getElementById('loginPassword').value = ''; // Clear password input
+    document.getElementById('loginError').style.display = 'none'; // Hide login error
   });
 }
 
