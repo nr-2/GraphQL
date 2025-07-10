@@ -220,12 +220,12 @@ export function setupEventListeners() {
     // Client-side logout: clear the token and reset the UI
     clearJwtToken(); // Clear the JWT token
     progressData = []; // Reset progress data
-    currentProgressIndex = 0; // Reset progress index
-
+    currentProgressIndex = 0; // Reset progressex
+ ind
     document.getElementById('loginBox').style.display = 'block'; // Show login box
-    document.getElementById('dashboardContent').style.display = 'none'; // Hide dashboard content
-    document.querySelector('.dashboard-header').style.display = 'none'; // Hide header on logout
-    document.querySelector('.dashboard').style.display = 'none'; // Hide dashboard on logout
+    document.getElementById('dashboardContent').style.display = 'none';
+    document.querySelector('.dashboard-header').style.display = 'none'; t
+    document.querySelector('.dashboard').style.display = 'none'; 
 
     document.getElementById('loginUsername').value = ''; // Clear username input
     document.getElementById('loginPassword').value = ''; // Clear password input

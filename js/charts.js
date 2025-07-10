@@ -240,7 +240,7 @@ export function drawSkills(skills) {
 }
 
 export function drawXPByProject(xpData) {
-    d3.select('#xpByProjectGraph').html(''); // Clear previous chart
+    d3.select('#xpByProjectGraph').html(''); 
 
     // Filter out projects with less than 5 KB (5000 bytes)
     xpData = xpData.filter(d => d.amount >= 5000);
