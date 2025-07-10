@@ -1,9 +1,8 @@
-import { login, loadUserInfo, loadAuditData, loadSkillsAndXPData, fetchProgress, clearJwtToken, getJwtToken } from './api.js';
-import { drawPie, drawXPOverTime, drawSkills } from './charts.js';
+import { login, loadUserInfo, loadAuditData, loadSkills, fetchProgress, clearJwtToken, getJwtToken, loadXPByProject } from './api.js';
+import { drawProgressBar, drawSkills, drawXPByProject } from './charts.js'; 
 
 let progressData = [];
 let currentProgressIndex = 0;
-// const logoutEndpoint = 'https://learn.reboot01.com/api/auth/signout'; // No longer needed if server-side logout is not used
 
 export function showProgress(index) {
   const progressCard = document.getElementById('progressCard');
@@ -61,13 +60,26 @@ export function bindProgressNavButtons() {
 async function updateUserInfo() {
   try {
     const user = await loadUserInfo();
-    // Defensive check: ensure user and its properties exist
     if (user) {
+        const labelNameElement = document.getElementById('labelName');
+        if (labelNameElement && user.labels && user.labels.length > 0) {
+            labelNameElement.textContent = user.labels[0].labelName || 'N/A';
+        } else if (labelNameElement) {
+            labelNameElement.textContent = 'N/A';
+        }
+
+        // Update other user details using their specific IDs
         document.getElementById('username').textContent = user.login || 'N/A';
-        document.getElementById('firstName').textContent = user.attrs?.firstName || 'N/A';
-        document.getElementById('lastName').textContent = user.attrs?.lastName || 'N/A';
-        document.getElementById('email').textContent = user.attrs?.email || 'N/A';
+        document.getElementById('firstName').textContent = user.firstName || 'N/A';
+        document.getElementById('lastName').textContent = user.lastName || 'N/A';
+        document.getElementById('email').textContent = user.email || 'N/A';
     } else {
+        // Fallback if no user data is found
+        document.getElementById('labelName').textContent = 'N/A';
+        document.getElementById('username').textContent = 'N/A';
+        document.getElementById('firstName').textContent = 'N/A';
+        document.getElementById('lastName').textContent = 'N/A';
+        document.getElementById('email').textContent = 'N/A';
         document.getElementById('userInfo').innerHTML = '<p>User information not found.</p>';
     }
   } catch (error) {
@@ -77,8 +89,8 @@ async function updateUserInfo() {
 
 async function updateAuditData() {
   try {
-    const { done, received } = await loadAuditData();
-    const ratio = received > 0
+    const { done, received, ratio } = await loadAuditData();
+    const displayRatio = received > 0
       ? (Math.round((done / received) * 10) / 10).toFixed(1)
       : done > 0
       ? '∞'
@@ -87,24 +99,24 @@ async function updateAuditData() {
     const doneMB = (done / 1_000_000).toFixed(2);
     const receivedMB = (received / 1_000_000).toFixed(2);
 
-    drawPie(done, received);
+    // Call the new drawProgressBar function
+    drawProgressBar(done, received, parseFloat(ratio.toFixed(1)));
+
     document.getElementById('auditText').innerHTML =
       `Done: <strong>${doneMB} MB</strong><br>
       Received: <strong>${receivedMB} MB</strong><br>
-      Ratio: <strong>${ratio}</strong> ${ratio >= 1.5 ? 'Almost perfect!' : ''}`;
+      Ratio: <strong>${ratio !== undefined ? ratio.toFixed(1) : displayRatio}</strong> ${ratio >= 1.5 ? 'Almost perfect!' : ''}`;
   } catch (error) {
     document.getElementById('auditSection').innerHTML = '<p>Error loading audit data.</p>';
   }
 }
 
-async function updateSkillsAndXPData() {
+async function updateSkills() {
   try {
-    const { skillsArray, xpOverTimeArray } = await loadSkillsAndXPData();
+    const { skillsArray} = await loadSkills();
     drawSkills(skillsArray);
-    drawXPOverTime(xpOverTimeArray);
   } catch (error) {
     document.getElementById('skillsSection').innerHTML = '<p>Error loading skills data.</p>';
-    document.getElementById('xpOverTimeSection').innerHTML = '<p>Error loading XP over time data.</p>';
   }
 }
 
@@ -126,11 +138,22 @@ async function updateProgressData() {
   }
 }
 
+async function updateXPByProjectData() {
+  try {
+    const xpData = await loadXPByProject();
+    drawXPByProject(xpData);
+  } catch (error) {
+    document.getElementById('xpByProjectSection').innerHTML = `<p>Error loading XP by Project data: ${error.message}</p>`;
+  }
+}
+
+
 export async function loadDashboardData() {
   await updateUserInfo();
   await updateAuditData();
-  await updateSkillsAndXPData();
+  await updateSkills();
   await updateProgressData();
+  await updateXPByProjectData(); 
 }
 
 export function setupEventListeners() {
@@ -208,6 +231,15 @@ export function setupEventListeners() {
     document.getElementById('loginPassword').value = ''; // Clear password input
     document.getElementById('loginError').style.display = 'none'; // Hide login error
   });
+
+  // Check for existing token on page load
+  if (getJwtToken()) {
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('dashboardContent').style.display = 'block';
+    document.querySelector('.dashboard-header').style.display = 'flex';
+    document.querySelector('.dashboard').style.display = 'block';
+    loadDashboardData(); // Load data if token exists
+  }
 }
 
 export function createLines() {

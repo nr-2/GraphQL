@@ -1,7 +1,8 @@
 const signinEndpoint = 'https://learn.reboot01.com/api/auth/signin';
 const gqlEndpoint = 'https://learn.reboot01.com/api/graphql-engine/v1/graphql';
 
-let jwtToken = null;
+let jwtToken = null; 
+const LOCAL_STORAGE_TOKEN_KEY = 'jwt_token'; // Key for localStorage
 
 export async function login(username, password) {
   const authHeader = 'Basic ' + btoa(`${username}:${password}`);
@@ -14,23 +15,40 @@ export async function login(username, password) {
     const errorText = await response.text();
     throw new Error('Invalid login');
   }
-  jwtToken = await response.json();
-  return jwtToken; // Return token for storage if needed
+  const tokenData = await response.json();
+  jwtToken = tokenData; // Store in-memory
+  localStorage.setItem(LOCAL_STORAGE_TOKEN_KEY, jwtToken); // Store in localStorage
+  return jwtToken;
 }
 
 export function getJwtToken() {
-    return jwtToken;
+    // Prioritize in-memory token, then check localStorage
+    if (jwtToken) {
+        return jwtToken;
+    }
+    const storedToken = localStorage.getItem(LOCAL_STORAGE_TOKEN_KEY);
+    if (storedToken) {
+        jwtToken = storedToken; // Populate in-memory from storage
+        return jwtToken;
+    }
+    return null;
 }
 
 export function clearJwtToken() {
     jwtToken = null;
+    localStorage.removeItem(LOCAL_STORAGE_TOKEN_KEY); // Remove from localStorage on logout
 }
 
 export async function fetchGraphQL(query, variables = {}) {
+  const currentToken = getJwtToken(); // Use the getter to ensure we get a stored token if available
+  if (!currentToken) {
+      throw new Error('No JWT token available. Please log in.');
+  }
+
   const response = await fetch(gqlEndpoint, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${jwtToken}`,
+      Authorization: `Bearer ${currentToken}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({ query, variables })
@@ -38,6 +56,11 @@ export async function fetchGraphQL(query, variables = {}) {
 
   if (!response.ok) {
     const errorText = await response.text();
+    // If unauthorized, clear token and prompt re-login
+    if (response.status === 401) {
+        clearJwtToken();
+        throw new Error('Session expired or unauthorized. Please log in again.');
+    }
     throw new Error(`GraphQL query failed: ${errorText}`);
   }
   const responseJson = await response.json();
@@ -47,83 +70,79 @@ export async function fetchGraphQL(query, variables = {}) {
   return responseJson.data;
 }
 
-export async function loadUserInfo() {
-  const query = `{
+
+  const userInfo = `query {
     user {
+      labels {
+        id
+        labelName
+      }
       id
       login
-      attrs
+      firstName
+      lastName
+      email
+      
     }
   }`;
-  const data = await fetchGraphQL(query);
-  // Add a defensive check here
+export async function loadUserInfo() {
+
+  const data = await fetchGraphQL( userInfo);
   if (data && data.user && data.user.length > 0) {
     return data.user[0];
   } else {
-    // Return a default or throw an error if no user data is found
     console.warn("No user data found or user array is empty.");
-    return null; // Or throw new Error("User data not found");
+    return null;
   }
 }
 
+
+
+  const  auditRatio = `query {
+    user {
+      id
+      auditRatio
+      totalUp
+      totalDown
+    }
+  }`;
+  
 export async function loadAuditData() {
-  const query = `{
-    transaction(where: {type: {_in: ["up", "down"]}}) {
+
+  const data = await fetchGraphQL(auditRatio);
+  if (data && data.user && data.user.length > 0) {
+    const user = data.user[0];
+    return {
+      done: user.totalUp,
+      received: user.totalDown,
+      ratio: user.auditRatio
+    };
+  } else {
+    console.warn("No audit data found or user array is empty.");
+    return { done: 0, received: 0, ratio: 0 };
+  }
+}
+
+export async function loadSkills() {
+  const skillsQuery = `query {
+    skillTransactions: transaction(
+      where: { type: { _like: "skill_%" } }
+      distinct_on: type
+      order_by: { type: desc, amount: desc }
+    ) {
       type
       amount
     }
   }`;
-  const data = await fetchGraphQL(query);
-  let done = 0;
-  let received = 0;
 
-  data.transaction.forEach(tx => {
-    if (tx.type === 'up') done += tx.amount;
-    else if (tx.type === 'down') received += tx.amount;
-  });
-  return { done, received };
-}
+  const skillsRawData = await fetchGraphQL(skillsQuery); 
 
-export async function loadSkillsAndXPData() {
-  const query = `{
-    transaction(where: { type: { _eq: "xp" } }) {
-      amount
-      path
-      createdAt
-    }
-  }`;
-  const data = await fetchGraphQL(query);
-  const xpByProject = {};
-  const xpByDate = {};
-
-  data.transaction.forEach(tx => {
-    const pathParts = tx.path.split('/');
-    let project = pathParts[2] || 'unknown';
-    if (pathParts[3] && pathParts[3].trim() !== '') {
-        project = pathParts[3];
-    } else if (pathParts[2] && pathParts[2].trim() !== '') {
-        project = pathParts[2];
-    }
-
-    const date = tx.createdAt.split('T')[0];
-
-    xpByProject[project] = (xpByProject[project] || 0) + tx.amount;
-    xpByDate[date] = (xpByDate[date] || 0) + tx.amount;
-  });
-
-  const skillsArray = Object.entries(xpByProject).map(([key, val]) => ({
-    type: key,
-    amount: val / 1000
+  const skillsArray = (skillsRawData.skillTransactions || []).map(skill => ({
+    type: skill.type.replace('skill_', ''), 
+    amount: skill.amount  
   }));
 
-  const xpOverTimeArray = Object.entries(xpByDate)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, val]) => ({
-      date: key,
-      amount: val / 1000
-    }));
-
-  return { skillsArray, xpOverTimeArray };
+  return { skillsArray };
 }
 
 export async function fetchProgress() {
@@ -140,4 +159,86 @@ export async function fetchProgress() {
   return filteredProgress.sort((a, b) => {
     return new Date(b.createdAt) - new Date(a.createdAt);
   });
+}
+
+const xpQuery = `query {
+    transaction(where: { type: { _eq: "xp" } }) {
+      amount
+      createdAt
+      userLogin
+      path
+    }
+  }`;
+
+export async function loadXPByProject() {
+    const data = await fetchGraphQL(xpQuery);
+    const xpByProject = {};
+
+    if (data && data.transaction) {
+        data.transaction.forEach(transaction => {
+            const path = transaction.path;
+
+            // Filter out specific paths
+            if (path.includes('/bahrain/bh-module/checkpoint') || path.includes('/bahrain/bh-piscine')) {
+                return; // Skip this transaction
+            }
+
+            let projectName = 'Unknown Project';
+            
+            // Most common case: path contains /xp/ followed by project name
+            const xpPathIndex = path.indexOf('/xp/');
+            if (xpPathIndex !== -1) {
+                let remainingPath = path.substring(xpPathIndex + 4); // Get string after '/xp/'
+                // Take the part before the next '/' or the whole remaining string
+                const nextSlashIndex = remainingPath.indexOf('/');
+                if (nextSlashIndex !== -1) {
+                    projectName = remainingPath.substring(0, nextSlashIndex);
+                } else if (remainingPath.length > 0) {
+                    projectName = remainingPath;
+                }
+            } else {
+                // Fallback for paths that don't have '/xp/', e.g., "div-01/piscine-js"
+                const pathParts = path.split('/').filter(part => part !== '');
+                if (pathParts.length > 0) {
+                    // Prioritize the last part if it seems like a project name
+                    // and not just 'xp' or a division.
+                    const lastPart = pathParts[pathParts.length - 1];
+                    if (lastPart && !lastPart.startsWith('div-') && lastPart !== 'xp' && lastPart !== 'skill') {
+                        projectName = lastPart;
+                    } else if (pathParts.length > 1) {
+                        // If last part was generic, try the second to last.
+                        const secondToLastPart = pathParts[pathParts.length - 2];
+                        if (secondToLastPart && !secondToLastPart.startsWith('div-')) {
+                            projectName = secondToLastPart;
+                        }
+                    } else {
+                        projectName = pathParts[0]; // As a final fallback
+                    }
+                }
+            }
+
+            // Clean up project name, remove prefixes like "xp-"
+            projectName = projectName.replace(/^xp-/, '');
+            
+            // Further refine names to be more readable
+            if (projectName === 'piscine-js') {
+                projectName = 'Piscine JS';
+            }
+            // Add more specific cleanups if you notice patterns (e.g., 'go-piscine' -> 'Go Piscine')
+
+            if (!xpByProject[projectName]) {
+                xpByProject[projectName] = 0;
+            }
+            xpByProject[projectName] += transaction.amount;
+        });
+    }
+
+    const xpArray = Object.keys(xpByProject).map(key => ({
+        project: key,
+        amount: xpByProject[key]
+    }));
+
+    xpArray.sort((a, b) => b.amount - a.amount);
+
+    return xpArray;
 }
