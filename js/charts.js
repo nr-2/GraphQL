@@ -96,7 +96,6 @@ export function drawProgressBar(done, received,) {
 }
 
 
-
 export function drawSkills(skills) {
     skills = skills
         .filter(skill => {

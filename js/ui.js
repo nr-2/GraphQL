@@ -193,14 +193,17 @@ export function setupEventListeners() {
       document.getElementById('loginButton').textContent = 'Logging in...';
       document.getElementById('loginError').style.display = 'none';
 
-      await login(username, password);
-      document.getElementById('loginBox').style.display = 'none';
-      document.getElementById('dashboardContent').style.display = 'block';
+
+      await login(username, password); //call login
+      //login success go to dash board 
+      document.getElementById('loginBox').style.display = 'none'; //hide
+      document.getElementById('dashboardContent').style.display = 'block';// show 
       document.querySelector('.dashboard-header').style.display = 'flex';
       document.querySelector('.dashboard').style.display = 'block';
-
+      //Load all data
       await loadDashboardData();
     } catch (e) {
+      //login fails, show error message
       document.getElementById('loginError').textContent = e.message || 'Login failed. Please check your credentials.';
       document.getElementById('loginError').style.display = 'block';
     } finally {
