@@ -219,21 +219,21 @@ export function setupEventListeners() {
     }
   });
 
-  document.getElementById('logoutButton').addEventListener('click', async () => {
-    // Client-side logout: clear the token and reset the UI
-    clearJwtToken(); // Clear the JWT token
-    progressData = []; // Reset progress data
-    currentProgressIndex = 0; // Reset progressex
- ind
-    document.getElementById('loginBox').style.display = 'block'; // Show login box
-    document.getElementById('dashboardContent').style.display = 'none';
-    document.querySelector('.dashboard-header').style.display = 'none'; t
-    document.querySelector('.dashboard').style.display = 'none'; 
+document.getElementById('logoutButton').addEventListener('click', async () => {
+  // Client-side logout: clear the token and reset the UI
+  clearJwtToken(); // Clear the JWT token
+  progressData = []; // Reset progress data
+  currentProgressIndex = 0; // Reset progress index
 
-    document.getElementById('loginUsername').value = ''; // Clear username input
-    document.getElementById('loginPassword').value = ''; // Clear password input
-    document.getElementById('loginError').style.display = 'none'; // Hide login error
-  });
+  document.getElementById('loginBox').style.display = 'block'; // Show login box
+  document.getElementById('dashboardContent').style.display = 'none';
+  document.querySelector('.dashboard-header').style.display = 'none';
+  document.querySelector('.dashboard').style.display = 'none'; 
+
+  document.getElementById('loginUsername').value = ''; // Clear username input
+  document.getElementById('loginPassword').value = ''; // Clear password input
+  document.getElementById('loginError').style.display = 'none'; // Hide login error
+});
 
   // Check for existing token on page load
   if (getJwtToken()) {
